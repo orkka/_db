@@ -52,6 +52,14 @@ Furthermore it provides out-of-the-box:
 		$q = db_s('items', array('family' => 'tablets'), array('price' => 'DESC'));
 		
     will translate to: `SELECT * FROM items WHERE family='tablets' ORDER BY price DESC;`
+    
+    This method returns a regular database resource pointer that can be counted or iterated using `mysql_fetch_assoc`-like methods or their provided wrappers :
+    	
+		$count = db_count($q);
+		
+		while ($row = db_fetch($q)) {
+			print_r($row);
+		}
 
 	*Advanced SELECT parameters*:
 	
