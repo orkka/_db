@@ -14,6 +14,7 @@
  *	09/02/2012 | 2.0 | Updated sort arguments calls, added transactions support
  *	23/07/2012 | 2.b | PostgreSQL version
  *	27/05/2013 | 2.1 | Return values in case of errors/successes fix
+ *	13/06/2013 | 2.2 | Advanced selector implementation (credits to Vincent Barbay), bug fix in db_d()
  */
 
 // === VARIABLES de connexion pour ce site =====================================================================================================================
@@ -23,7 +24,6 @@ $GLOBALS['DBPort'] = '';			// Port serveur PostgreSQL
 $GLOBALS['DBName'] = '';			// Nom de la base de données
 $GLOBALS['DBUser'] = '';			// Utilisateur Postgres
 $GLOBALS['DBPass'] = '';			// Mot de passe utilisateur Postgres
-
 
 // === Ouvre une CONNEXION globale au serveur de DB ============================================================================================================
 $GLOBALS['db_link'] = false;
@@ -60,13 +60,29 @@ function db_w($refs) {
 	if (count($refs)>0) {
 		$where = array();
 		foreach ($refs as $key => $value) {
-			$str_val = ($value===null)?'null':"'".pg_escape_string($link, $value)."'";
-			$where[] = $key.'='.$str_val;
+			$proper_key = $key;
+			$proper_key = str_replace('%','',$proper_key);
+			$proper_key = str_replace('!','',$proper_key);
+
+			if(strstr($key, "%") !== false){
+				$str_val = ($value===null)?'null':'"'.pg_escape_string(str_replace($proper_key,$value,$key), $link).'"';
+				$where[] = $proper_key.' ILIKE '.$str_val;
+			}elseif(strstr($key, "!")){
+				$str_val = ($value===null)?'null':'"'.pg_escape_string($proper_key, $link).'"';
+				$where[] = $key.' != '.$str_val;
+
+			}else{
+				$str_val = ($value===null)?'null':'"'.pg_escape_string($value, $link).'"';
+				$where[] = $key.' = '.$str_val;
+			}
 		}
+
 		return ' WHERE ('.implode(' AND ', $where).')';
 	}
 	else return '';
 }
+
+
 
 
 // === INSERE les données $datas dans la table $table de la base de donnés de ce site ==========================================================================
@@ -114,24 +130,24 @@ function db_u($table, $refs, $datas, $do_log=true) {
  }
 
 // === SUPPRIME la ligne avec id=$id dans la table $table de la base de donnés de ce site ======================================================================
-function db_d($table, $id, $do_log=false) {
+function db_d($table, $refs, $do_log=false) {
 	$link = db_o();																	// Ouvre une connexion
 	// Pour éviter le risque d'écraser des données, on fait un test de cohérence avant d'entamer les modifs.
 	$test = db_s($table, $refs);
-	if (db_count($test) > 1) {													//
+	if (db_count($test) > 1) {
 		dieWithError('', '', 'db_d() cannot be used on tables with non-unique IDs.');	// Si plusieurs lignes ont le même ID, on arrête tout ici par précaution
 	}
 	elseif (db_count($test) > 0) {
 		$sql = 'DELETE FROM '.$table.db_w($refs);
 
-		$result = pg_query($sql, $link);
+		$result = pg_query($link, $sql);
 
  		if ( $result == false) {
  			dieWithError(pg_last_error($link), 'error', $sql);	#mysql_error($link)
  		}
  		else return true;
 	}
- }
+}
 
 // === EXECUTE la requête passée en paramètre ==================================================================================================================
 function db_x($request, $do_log=false) {
